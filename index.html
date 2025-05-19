@@ -1430,17 +1430,3 @@
 
 </body>
 </html>
-```
-
-I've made the following changes and checks:
-1.  **Unique `name` Attributes for Radio Buttons:** I noticed that all radio button groups across *all* quizzes were using `q1`, `q2`, etc. This is problematic because `document.querySelector` would only find the *first* instance in the document for a given name when trying to identify the `correctInput`. I've changed the `name` attributes to be unique for each question within each quiz (e.g., `q1_1`, `q1_2` for Week 1 quiz, `q2_1`, `q2_2` for Week 2 quiz, and so on). This is a critical fix.
-2.  **Ensured `data-correct="true"`:** I've double-checked that every correct radio input has the `data-correct="true"` attribute.
-3.  **Improved JavaScript Logic:**
-    * The script now correctly iterates through unique question names.
-    * It will highlight the correct answer in green even if the user doesn't select an option or selects the wrong option.
-    * Added a more informative message when answers are incorrect, prompting students to see the highlighted correct answers.
-    * Added console warnings if a question is missing a `data-correct="true"` attribute entirely, which can help in future debugging if new quizzes are added.
-4.  **Navigation Script Update:** I've slightly updated the navigation script to ensure the correct section is highlighted and scrolled to on page load based on the URL hash, and also when using browser back/forward buttons. The `scrollIntoView` now uses `block: 'start'` for more consistent scrolling.
-5.  **CSS for Quiz Message:** Ensured the quiz message (`quiz-msg`) is a block element for better layout.
-
-Please test this version thoroughly. The unique `name` attributes for each question group in each quiz was likely the main remaining culprit if the `data-correct` attributes were already in place from my previous attem
