@@ -1380,37 +1380,53 @@
 </script>
 
   <!-- ===========================
-    NEW: SEND WEEK‑1 RESULTS TO GOOGLE SHEETS
+    NEW: SEND QUIZ RESULTS TO GOOGLE SHEETS (Weeks 1‑10)
     =========================== -->
   <script>
+    // Replace with your own Web App URL if you deploy a different version
     const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby-wMidK0cGCxemHCwtSa6hE0EiqAyZFWJixWIYe7BvWSk6ch3qi-_9kbDb_6rSRCKn/exec';
+
+    // Attach a listener to every quiz's "Check answers" button so we can
+    // record the student's name, the week number, and their score text.
     document.addEventListener('DOMContentLoaded', () => {
-      const week1Form = document.querySelector('form.quiz[data-week="1"]');
-      if (!week1Form) return;
-      const btn = week1Form.querySelector('.check-btn');
-      if (!btn) return;
-      btn.addEventListener('click', () => {
-        setTimeout(() => {
-          const msg = week1Form.querySelector('.quiz-msg');
-          const scoreText = msg ? msg.textContent : '';
-          const studentName = prompt('Please enter your name so we can record your score:');
-          if (!studentName) return;
-          const payload = {
-            timestamp: new Date().toISOString(),
-            studentName: studentName.trim(),
-            week: 1,
-            score: scoreText
-          };
-          fetch(SHEET_WEBAPP_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }).catch(err => console.error('Error sending data to Google Sheets:', err));
-        }, 100);
+      document.querySelectorAll('form.quiz').forEach(form => {
+        const week = form.dataset.week;                 // e.g. "1", "2", ... "10"
+        if (!week) return;                              // Skip if no data‑week attr
+        const btn = form.querySelector('.check-btn');   // The button that marks
+        if (!btn) return;                               // Skip if button missing
+
+        btn.addEventListener('click', () => {
+          // Delay slightly so the marking script updates the score message first
+          setTimeout(() => {
+            const msg = form.querySelector('.quiz-msg');
+            const scoreText = msg ? msg.textContent.trim() : '';
+
+            // Prompt for the student's name (you can swap this for a nicer UI)
+            const studentName = prompt('Please enter your name so we can record your Week ' + week + ' quiz score:');
+            if (!studentName) return; // User cancelled
+
+            const payload = {
+              timestamp: new Date().toISOString(),
+              studentName: studentName.trim(),
+              week: week,
+              score: scoreText
+            };
+
+            // Fire‑and‑forget POST request (no‑cors so we don’t need CORS headers)
+            fetch(SHEET_WEBAPP_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(err =>
+              console.error('Error sending data to Google Sheets for Week ' + week + ':', err)
+            );
+          }, 150);
+        });
       });
     });
   </script>
+>
 
 </body>
 </html>
