@@ -1325,89 +1325,6 @@
     });
   </script>
 <script>
-// Updated speakText function
-function speakText(button) {
-    speechSynthesis.cancel(); // Cancel any ongoing speech if buttons are clicked rapidly
-
-    const parentElement = button.parentElement;
-    let textToRead = "";
-
-    if (parentElement) {
-        let rawText = parentElement.textContent;
-        // Remove the button's own text (typically "🔊")
-        // This aims to remove the specific button's icon text from the parent's total text content.
-        if (button.textContent) {
-            const btnText = button.textContent;
-            // A simple way is to try and remove the first occurrence, assuming the button is part of the text.
-            // However, since the button is usually at the end, or its text is just an icon,
-            // a more direct approach might be to reconstruct text from siblings, or clean specifically.
-            // For this structure, replacing the button's icon text is often sufficient.
-            // Let's try to remove all instances of the button's text content from the parent's text content.
-            // This is safer if the icon "🔊" is unique to buttons and not part of the actual question/answer text.
-            textToRead = rawText.split(btnText).join("").trim();
-
-
-            // If the above is too aggressive (e.g. "🔊" in actual text),
-            // a more careful removal of only the button's contribution is needed.
-            // One way for current structure:
-            // textToRead = parentElement.innerHTML.replace(/<button.*?<\/button>/gi, "").replace(/<input.*?>/gi, "").replace(/<br.*?>/gi, "").replace(/&nbsp;/g, " ").replace(/<[^>]+>/g, "").trim();
-            // The above is complex. The initial split().join() is simpler if "🔊" is safe to remove.
-            // Let's refine the removal to be more specific to the button's text from the end.
-            const lastIndexOfBtnText = rawText.lastIndexOf(btnText);
-            if (lastIndexOfBtnText !== -1 && rawText.substring(lastIndexOfBtnText) === btnText) { // Check if it's truly at the end
-                 textToRead = rawText.substring(0, lastIndexOfBtnText).trim();
-            } else {
-                 // Fallback if the button text is not exactly at the end or something is unusual
-                 textToRead = rawText.replace(btnText, "").trim(); // Try removing first occurrence
-            }
-
-        } else {
-             textToRead = rawText.trim(); // Should not happen if button has text
-        }
-    }
-
-    if (textToRead) {
-        const utterance = new SpeechSynthesisUtterance(textToRead);
-        // utterance.lang = 'en-AU'; // Optional: specify language for better pronunciation
-        speechSynthesis.speak(utterance);
-    } else {
-        // Fallback: try reading the aria-label, stripping common prefixes
-        let fallbackText = button.getAttribute('aria-label') || "";
-        fallbackText = fallbackText.replace(/^Read (question aloud|question|answer) /i, "").trim();
-        // Ensure fallbackText is not empty or just the prefix itself
-        if (fallbackText && fallbackText.toLowerCase() !== "read aloud" && fallbackText.toLowerCase() !== "read question" && fallbackText.toLowerCase() !== "read answer") {
-            const utterance = new SpeechSynthesisUtterance(fallbackText);
-            // utterance.lang = 'en-AU';
-            speechSynthesis.speak(utterance);
-        } else {
-            console.warn("SpeakText: No meaningful text found to read for button or aria-label:", button);
-        }
-    }
-}
-</script>
-<script>
-function checkQuiz(quizId) {
-    var form = document.getElementById(quizId);
-    var correctCount = 0;
-    var items = form.querySelectorAll('input[type=radio]');
-    // Reset previous results
-    form.querySelectorAll('label').forEach(label => label.removeAttribute('data-result'));
-    // Check each question
-    var questionCount = form.querySelectorAll('p').length;
-    form.querySelectorAll('p').forEach((p,i) => {
-        var questionIndex = i+1;
-        var selected = form.querySelector(`input[name=q${quizId.split("week")[1].split("-")[0]}_${questionIndex}]:checked`);
-        var correctVal = form.querySelector(`input[name=q${quizId.split("week")[1].split("-")[0]}_${questionIndex}[data-correct]`);
-        if (selected && correctVal && selected.value === correctVal.value) {
-            selected.closest('label').setAttribute('data-result','right');
-            correctCount++;
-        } else if (selected) {
-            selected.closest('label').setAttribute('data-result','wrong');
-        }
-    });
-    document.getElementById(quizId + '-msg').textContent = 'You scored ' + correctCount + '/' + questionCount;
-}
-</script><script>
 // SEND QUIZ RESULTS TO GOOGLE SHEETS (Weeks 1‑10)
 const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/EXECUTABLE_WEB_APP_URL/exec';
 document.addEventListener('DOMContentLoaded', () => {
@@ -1433,5 +1350,80 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
-</script></body>
+</script>
+<script>
+// Voice Setup
+const synth = window.speechSynthesis;
+let voices = [];
+synth.onvoiceschanged = () => { voices = synth.getVoices(); };
+
+// Speak text helper
+function speakText(btn) {
+  let text = '';
+  if (btn.dataset.text) {
+    text = btn.dataset.text;
+  } else {
+    const p = btn.closest('p');
+    if (p) {
+      text = Array.from(p.childNodes)
+        .filter(n => n.nodeType === Node.TEXT_NODE)
+        .map(n => n.textContent.trim())
+        .join(' ');
+    } else {
+      const lbl = btn.closest('label');
+      text = Array.from(lbl.childNodes)
+        .filter(n => n.nodeType === Node.TEXT_NODE)
+        .map(n => n.textContent.trim())
+        .filter(t => t.length)
+        .join(' ');
+    }
+  }
+  if (!voices.length) voices = synth.getVoices();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.voice = voices.find(v => v.name === 'Google UK English Female')
+             || voices.find(v => /Natural/.test(v.name))
+             || voices[0];
+  synth.speak(utt);
+}
+
+// Quiz scoring
+function checkQuiz(quizId) {
+  const form = document.getElementById(quizId);
+  let correctCount = 0;
+  const questions = form.querySelectorAll('li');
+  questions.forEach(li => {
+    const selected = li.querySelector('input[type=radio]:checked');
+    const correctInput = li.querySelector('input[data-correct]');
+    const correct = correctInput ? correctInput.value : null;
+    li.querySelectorAll('label').forEach(lbl => lbl.removeAttribute('data-result'));
+    if (selected) {
+      const label = selected.closest('label');
+      if (selected.value === correct) {
+        label.setAttribute('data-result','right');
+        correctCount++;
+      } else {
+        label.setAttribute('data-result','wrong');
+      }
+    }
+  });
+  const msg = document.getElementById(quizId + '-msg');
+  if (msg) msg.textContent = `You scored ${correctCount}/${questions.length}`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('form.quiz button').forEach(btn => {
+    btn.removeAttribute('onclick');
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      if (btn.classList.contains('check-btn')) {
+        const form = btn.closest('form.quiz');
+        if (form) checkQuiz(form.id);
+      } else {
+        speakText(btn);
+      }
+    });
+  });
+});
+</script>
+</body>
 </html>
