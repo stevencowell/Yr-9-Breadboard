@@ -257,12 +257,19 @@
 </main>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('[data-include]').forEach(el => {
-    fetch(el.getAttribute('data-include'))
+function loadIncludes(root = document) {
+  root.querySelectorAll('[data-include]').forEach(el => {
+    const file = el.getAttribute('data-include');
+    fetch(file)
       .then(res => res.text())
-      .then(html => { el.innerHTML = html; });
+      .then(html => {
+        el.innerHTML = html;
+        loadIncludes(el); // load nested includes
+      });
   });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  loadIncludes();
 });
 </script>
 <footer>
