@@ -265,11 +265,13 @@ function loadIncludes(root = document) {
       .then(html => {
         el.innerHTML = html;
         loadIncludes(el); // load nested includes
+        attachQuizHandlers(el); // attach quiz handlers in newly loaded content
       });
   });
 }
 document.addEventListener('DOMContentLoaded', () => {
   loadIncludes();
+  attachQuizHandlers();
 });
 </script>
 <footer>
@@ -334,145 +336,94 @@ document.addEventListener('DOMContentLoaded', () => {
         // Listen for hash changes (e.g., browser back/forward buttons)
         window.addEventListener('hashchange', setActiveSection);
     });
-
-    // Script for handling quiz functionality
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('form.quiz').forEach(form => {
-            const btn = form.querySelector('.check-btn');
-            const msg = form.querySelector('.quiz-msg');
-
-            if (!btn) {
-                console.error('Quiz form is missing a .check-btn element:', form);
-                return;
-            }
-            if (!msg) {
-                console.error('Quiz form is missing a .quiz-msg element:', form);
-                return;
-            }
-
-            btn.addEventListener('click', () => {
-                let total = 0;
-                let correct = 0;
-
-                // Reset labels: remove previous results
-                form.querySelectorAll('label').forEach(l => {
-                    l.removeAttribute('data-result');
-                });
-
-                const questions = new Set();
-                // Get all unique question names (radio button groups)
-                form.querySelectorAll('input[type="radio"]').forEach(radioInput => {
-                    questions.add(radioInput.name);
-                });
-
-                questions.forEach(questionName => {
-                    total++;
-                    const chosenRadio = form.querySelector(`input[name="${questionName}"]:checked`);
-                    const correctRadio = form.querySelector(`input[name="${questionName}"][data-correct="true"]`);
-
-                    if (!correctRadio) {
-                        console.warn(`Question "${questionName}" in form for week ${form.dataset.week || 'unknown'} is missing a data-correct="true" attribute on any option.`);
-                    }
-
-                    if (chosenRadio) { // If an answer was selected
-                        if (correctRadio && chosenRadio === correctRadio) {
-                            correct++;
-                            chosenRadio.parentElement.setAttribute('data-result', 'right');
-                        } else {
-                            chosenRadio.parentElement.setAttribute('data-result', 'wrong');
-                            if (correctRadio) {
-                                correctRadio.parentElement.setAttribute('data-result', 'right');
-                            }
-                        }
-                    } else { // If no answer was selected for this question
-                        if (correctRadio) {
-                            correctRadio.parentElement.setAttribute('data-result', 'right');
-                        }
-                    }
-                });
-
-                if (total === 0) {
-                    msg.textContent = "No questions found in this quiz.";
-                    msg.style.color = 'orange';
-                } else if (correct === total) {
-                    msg.textContent = `✅ Correct! ${correct}/${total}`;
-                    msg.style.color = 'green';
-                } else {
-                    msg.textContent = `❌ ${correct}/${total} correct. The correct answers are highlighted in green.`;
-                    msg.style.color = 'red';
-                }
-            });
-        });
-    });
 </script>
-<!-- ===========================
-    NEW: SEND QUIZ RESULTS TO GOOGLE SHEETS (Weeks 1‑10)
-    =========================== -->
+
 <script>
-    // Replace with your own Web App URL if you deploy a different version
-    const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby-wMidK0cGCxemHCwtSa6hE0EiqAyZFWJixWIYe7BvWSk6ch3qi-_9kbDb_6rSRCKn/exec';
+// Google Sheets integration and quiz handling
+const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzPXp0uu0WYscg9PMwscZ4Xdh-Sfo43dqFCuHv6C3WiKp1eMOSPwddmDM5w2Cege6d5/exec';
 
-    document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('form.quiz').forEach(form => {
-        const week = form.dataset.week;                 // e.g. "1", "2", ... "10"
-        if (!week) return;                              // Skip if no data‑week attr
-        const btn = form.querySelector('.check-btn');   // The button that marks
-        if (!btn) return;                               // Skip if button missing
-
-        btn.addEventListener('click', () => {
-          setTimeout(() => {
-            const msg = form.querySelector('.quiz-msg');
-            const scoreText = msg ? msg.textContent.trim() : '';
-            const studentName = prompt('Please enter your name so we can record your Week ' + week + ' quiz score:');
-            if (!studentName) return; 
-
-            const payload = {
-              timestamp: new Date().toISOString(),
-              studentName: studentName.trim(),
-              week: week,
-              score: scoreText
-            };
-
-            fetch(SHEET_WEBAPP_URL, {
-              method: 'POST',
-              mode: 'no-cors', // Important: no-cors mode for fire-and-forget to avoid CORS preflight issues
-              headers: { 'Content-Type': 'application/json' }, // Note: Content-Type might not be sent in no-cors, but good practice
-              body: JSON.stringify(payload)
-            }).catch(err =>
-              console.error('Error sending data to Google Sheets for Week ' + week + ':', err)
-            );
-          }, 150);
-        });
-      });
-    });
-  </script>
-<script>
-// SEND QUIZ RESULTS TO GOOGLE SHEETS (Weeks 1‑10)
-const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/EXECUTABLE_WEB_APP_URL/exec';
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('form.quiz').forEach(form => {
-    const week = form.dataset.week;
-    if (!week) return;
+function attachQuizHandlers(root = document) {
+  root.querySelectorAll('form.quiz').forEach(form => {
+    if (form.dataset.bound) return;
+    form.dataset.bound = 'true';
     const btn = form.querySelector('.check-btn');
-    if (!btn) return;
+    const msg = form.querySelector('.quiz-msg');
+    if (!btn || !msg) return;
     btn.addEventListener('click', () => {
-      setTimeout(() => {
-        const payload = {
-          week: week,
-          timestamp: new Date().toISOString(),
-          score: form.querySelector('.quiz-msg').textContent
-        };
-        fetch(SHEET_WEBAPP_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        }).catch(err => console.error('Error sending data to Google Sheets for Week ' + week + ':', err));
-      }, 200);
+      let total = 0;
+      let correct = 0;
+      form.querySelectorAll('label').forEach(l => l.removeAttribute('data-result'));
+      const questions = new Set();
+      form.querySelectorAll('input[type="radio"]').forEach(r => questions.add(r.name));
+      questions.forEach(name => {
+        total++;
+        const chosen = form.querySelector(`input[name="${name}"]:checked`);
+        const right = form.querySelector(`input[name="${name}"][data-correct="true"]`);
+        if (!right) {
+          console.warn(`Question \"${name}\" in form for week ${form.dataset.week || 'unknown'} is missing a data-correct attribute.`);
+        }
+        if (chosen) {
+          if (right && chosen === right) {
+            correct++;
+            chosen.parentElement.setAttribute('data-result','right');
+          } else {
+            chosen.parentElement.setAttribute('data-result','wrong');
+            if (right) right.parentElement.setAttribute('data-result','right');
+          }
+        } else if (right) {
+          right.parentElement.setAttribute('data-result','right');
+        }
+      });
+      if (total === 0) {
+        msg.textContent = 'No questions found in this quiz.';
+        msg.style.color = 'orange';
+      } else if (correct === total) {
+        msg.textContent = `✅ Correct! ${correct}/${total}`;
+        msg.style.color = 'green';
+      } else {
+        msg.textContent = `❌ ${correct}/${total} correct. The correct answers are highlighted in green.`;
+        msg.style.color = 'red';
+      }
+      const week = form.dataset.week;
+      const prefix = form.id && form.id.startsWith('support-') ? 'S' : 'M';
+      const studentName = prompt('Please enter your name so we can record your Week ' + week + ' quiz score:');
+      if (!studentName) return;
+      const payload = {
+        studentName: studentName.trim(),
+        quizNumber: prefix + week,
+        score: msg.textContent.trim()
+      };
+      fetch(SHEET_WEBAPP_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.error('Error sending data to Google Sheets for quiz ' + prefix + week + ':', err));
     });
   });
-});
+}
+
+function submitAdv(e, week) {
+  e.preventDefault();
+  const form = e.target;
+  const studentName = form.querySelector('input[name="studentName"]').value.trim();
+  if (!studentName) {
+    alert('Please enter your name.');
+    return;
+  }
+  const responses = Array.from(form.querySelectorAll('textarea')).map(t => t.value.trim());
+  fetch(SHEET_WEBAPP_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentName, quizNumber: 'A' + week, responses })
+  }).catch(err => console.error('Error sending data to Google Sheets for advanced quiz A' + week + ':', err));
+  const msg = form.querySelector('.msg');
+  if (msg) msg.textContent = '✅ Submitted';
+  form.reset();
+}
 </script>
+
 <script>
 // Voice Setup
 const synth = window.speechSynthesis;
@@ -508,44 +459,6 @@ function speakText(btn) {
   synth.speak(utt);
 }
 
-// Quiz scoring
-function checkQuiz(quizId) {
-  const form = document.getElementById(quizId);
-  let correctCount = 0;
-  const questions = form.querySelectorAll('li');
-  questions.forEach(li => {
-    const selected = li.querySelector('input[type=radio]:checked');
-    const correctInput = li.querySelector('input[data-correct]');
-    const correct = correctInput ? correctInput.value : null;
-    li.querySelectorAll('label').forEach(lbl => lbl.removeAttribute('data-result'));
-    if (selected) {
-      const label = selected.closest('label');
-      if (selected.value === correct) {
-        label.setAttribute('data-result','right');
-        correctCount++;
-      } else {
-        label.setAttribute('data-result','wrong');
-      }
-    }
-  });
-  const msg = document.getElementById(quizId + '-msg');
-  if (msg) msg.textContent = `You scored ${correctCount}/${questions.length}`;
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('form.quiz button').forEach(btn => {
-    btn.removeAttribute('onclick');
-    btn.addEventListener('click', e => {
-      e.preventDefault();
-      if (btn.classList.contains('check-btn')) {
-        const form = btn.closest('form.quiz');
-        if (form) checkQuiz(form.id);
-      } else {
-        speakText(btn);
-      }
-    });
-  });
-});
 </script>
 </body>
 </html>
