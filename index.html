@@ -340,8 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
 // Google Sheets integration and quiz handling
-const SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzPXp0uu0WYscg9PMwscZ4Xdh-Sfo43dqFCuHv6C3WiKp1eMOSPwddmDM5w2Cege6d5/exec';
-
 function attachQuizHandlers(root = document) {
   root.querySelectorAll('form.quiz').forEach(form => {
     if (form.dataset.bound) return;
@@ -388,17 +386,24 @@ function attachQuizHandlers(root = document) {
       const prefix = form.id && form.id.startsWith('support-') ? 'S' : 'M';
       const studentName = prompt('Please enter your name so we can record your Week ' + week + ' quiz score:');
       if (!studentName) return;
-      const payload = {
-        studentName: studentName.trim(),
-        quizNumber: prefix + week,
+      const data = {
+        name: studentName.trim(),
+        quiz: prefix + week,
         score: msg.textContent.trim()
       };
-      fetch(SHEET_WEBAPP_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(err => console.error('Error sending data to Google Sheets for quiz ' + prefix + week + ':', err));
+      const onSuccess = message => alert(message);
+      const onFailure = err => alert(err.message);
+      if (prefix === 'M') {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .submitMain(data);
+      } else {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .submitSupport(data);
+      }
     });
   });
 }
@@ -412,15 +417,23 @@ function submitAdv(e, week) {
     return;
   }
   const responses = Array.from(form.querySelectorAll('textarea')).map(t => t.value.trim());
-  fetch(SHEET_WEBAPP_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ studentName, quizNumber: 'A' + week, responses })
-  }).catch(err => console.error('Error sending data to Google Sheets for advanced quiz A' + week + ':', err));
+  const data = {
+    name: studentName,
+    quiz: 'A' + week,
+    question1: responses[0] || '',
+    question2: responses[1] || '',
+    question3: responses[2] || ''
+  };
   const msg = form.querySelector('.msg');
-  if (msg) msg.textContent = '✅ Submitted';
-  form.reset();
+  google.script.run
+    .withSuccessHandler(message => {
+      if (msg) msg.textContent = message;
+      form.reset();
+    })
+    .withFailureHandler(err => {
+      if (msg) msg.textContent = err.message;
+    })
+    .submitAdvanced(data);
 }
 </script>
 
